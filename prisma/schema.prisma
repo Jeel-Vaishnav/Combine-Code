@@ -1,0 +1,228 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  name         String
+  avatarUrl    String
+  role         String         @default("MEMBER") // ADMIN, LEAD, MEMBER, VIEWER
+  color        String         @default("#3b82f6") // Accent color for avatars & presence
+  passwordHash String?        // Hashed password for authentication
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  assignedTasks   TaskAssignee[]
+  comments        Comment[]
+  activities      ActivityLog[]
+  projectMembers  ProjectMember[]
+  joinRequests    ProjectJoinRequest[]
+}
+
+model Workspace {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  projects    Project[]
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  code        String?       @unique // Unique invite code e.g. PRJ-9042-X7K
+  ownerId     String?       // Creator user id
+  name        String
+  slug        String
+  description String?
+  status      String        @default("ACTIVE") // ACTIVE, ARCHIVED, COMPLETED
+  targetDate  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  columns      TaskColumn[]
+  tasks        Task[]
+  activities   ActivityLog[]
+  members      ProjectMember[]
+  joinRequests ProjectJoinRequest[]
+
+  @@index([workspaceId])
+  @@index([code])
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   @default("MEMBER") // OWNER, LEAD, MEMBER, ADMIN, VIEWER
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+model ProjectJoinRequest {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    String   @default("PENDING") // PENDING, ACCEPTED, DECLINED
+  note      String?
+  assignedRole String @default("MEMBER")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([status])
+}
+
+model TaskColumn {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  key         String   // backlog, todo, in_progress, review, done
+  order       Float    // Fractional or sequential order
+  color       String   @default("#64748b")
+  isDone      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tasks       Task[]
+
+  @@index([projectId])
+}
+
+model Task {
+  id          String         @id @default(cuid())
+  projectId   String
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  columnId    String
+  column      TaskColumn     @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  title       String
+  description String         @default("")
+  priority    String         @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  dueDate     DateTime?
+  position    Float          @default(1000.0) // Fractional indexing for O(1) drag & drop
+  version     Int            @default(1) // Monotonic version counter for Optimistic Concurrency Control (OCC)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  assignees   TaskAssignee[]
+  subtasks    Subtask[]
+  tags        TaskTag[]
+  comments    Comment[]
+  attachments Attachment[]
+  activities  ActivityLog[]
+
+  @@index([projectId])
+  @@index([columnId])
+  @@index([position])
+}
+
+model TaskAssignee {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, userId])
+  @@index([taskId])
+  @@index([userId])
+}
+
+model Subtask {
+  id          String   @id @default(cuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title       String
+  isCompleted Boolean  @default(false)
+  position    Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([taskId])
+}
+
+model Tag {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  color     String    @default("#6366f1")
+  tasks     TaskTag[]
+}
+
+model TaskTag {
+  id        String   @id @default(cuid())
+  taskId    String
+  tagId     String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, tagId])
+  @@index([taskId])
+  @@index([tagId])
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  taskId    String
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parentId  String?
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
+  content   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([taskId])
+  @@index([parentId])
+}
+
+model Attachment {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  name      String
+  url       String
+  size      Int
+  mimeType  String
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String   // TASK_CREATED, TASK_MOVED, TASK_UPDATED, COMMENT_ADDED, CONFLICT_RESOLVED, etc.
+  details   String   // JSON string of changes
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@index([taskId])
+  @@index([createdAt])
+}
