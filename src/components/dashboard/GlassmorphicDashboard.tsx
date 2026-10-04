@@ -400,7 +400,7 @@ export function GlassmorphicDashboard({
 
     const newMessage = {
       id: `msg_${Date.now()}`,
-      sender: currentUser || { id: "usr_jeel", name: "Jeel Vaishnav", avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Jeel", role: "LEAD", color: "#9f1239" },
+      sender: currentUser || { id: "usr_jeel", name: "Jeel Vaishnav", email: "jeel@example.com", avatarUrl: "https://api.dicebear.com/7.x/avataaars/svg?seed=Jeel", role: "LEAD", color: "#9f1239" },
       text: chatInput.trim(),
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isRead: true,
