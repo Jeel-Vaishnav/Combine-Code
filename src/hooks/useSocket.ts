@@ -78,7 +78,8 @@ export function useSocket({
     if (!projectId || !currentUser) return;
 
     // Connect to Socket.io server
-    const socket: TypedSocket = io({
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "";
+    const socket: TypedSocket = io(socketUrl, {
       path: "/socket.io",
       reconnection: true,
       reconnectionAttempts: 10,
